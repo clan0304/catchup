@@ -73,6 +73,9 @@ export async function sendConnectionRequest(
 /**
  * Get all pending connection requests for a user
  */
+/**
+ * Get all pending connection requests for a user
+ */
 export async function getConnectionRequests(userId: string) {
   try {
     const { data, error } = await supabase
@@ -135,8 +138,23 @@ export async function acceptConnectionRequest(requestId: string) {
 }
 
 /**
- * Get all connections for a user with detailed profile information
+ * Decline a connection request
  */
+export async function declineConnectionRequest(requestId: string) {
+  try {
+    // Delete the request
+    const { error } = await supabase
+      .from('connection_requests')
+      .delete()
+      .eq('id', requestId);
+
+    return { error };
+  } catch (error) {
+    console.error('Error declining connection request:', error);
+    return { error };
+  }
+}
+
 export async function getUserConnections(
   userId: string
 ): Promise<{ connections: UserConnection[]; error: any }> {

@@ -1,12 +1,37 @@
 // app/(app)/_layout.tsx
-import React from 'react';
-import { Tabs } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { Tabs, Stack } from 'expo-router';
 import { useAuth } from '../../context/auth';
 import { Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { getUnreadMessageCount } from '../../services/messages';
+import { getConnectionRequests } from '../../services/connections';
+import { View, Text } from 'react-native';
 
 export default function AppLayout() {
   const { user, loading } = useAuth();
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
+
+  // Load unread message count and refresh periodically
+  useEffect(() => {
+    if (!user) return;
+
+    const loadUnreadCount = async () => {
+      const { count } = await getUnreadMessageCount(user.id);
+      setUnreadCount(count);
+
+      const { requests } = await getConnectionRequests(user.id);
+      setPendingRequestsCount(requests.length);
+    };
+
+    loadUnreadCount();
+
+    // Set up a polling interval
+    const intervalId = setInterval(loadUnreadCount, 30000); // Every 30 seconds
+
+    return () => clearInterval(intervalId);
+  }, [user]);
 
   // If not authenticated, redirect to auth
   if (!user && !loading) {
@@ -47,7 +72,35 @@ export default function AppLayout() {
         options={{
           title: 'Connections',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="people-outline" size={size} color={color} />
+            <View>
+              <Ionicons name="people-outline" size={size} color={color} />
+              {pendingRequestsCount > 0 && (
+                <View className="absolute -top-1 -right-1 bg-red-500 rounded-full min-w-5 h-5 items-center justify-center">
+                  <Text className="text-white text-xs font-bold">
+                    {pendingRequestsCount > 9 ? '9+' : pendingRequestsCount}
+                  </Text>
+                </View>
+              )}
+            </View>
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="messages"
+        options={{
+          title: 'Messages',
+          href: null,
+          tabBarIcon: ({ color, size }) => (
+            <View>
+              <Ionicons name="chatbubbles-outline" size={size} color={color} />
+              {unreadCount > 0 && (
+                <View className="absolute -top-1 -right-1 bg-red-500 rounded-full min-w-5 h-5 items-center justify-center">
+                  <Text className="text-white text-xs font-bold">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </Text>
+                </View>
+              )}
+            </View>
           ),
         }}
       />
@@ -62,6 +115,18 @@ export default function AppLayout() {
       />
       <Tabs.Screen
         name="profile-setup"
+        options={{
+          href: null, // Hide this from the tab bar
+        }}
+      />
+      <Tabs.Screen
+        name="profile-update"
+        options={{
+          href: null, // Hide this from the tab bar
+        }}
+      />
+      <Tabs.Screen
+        name="chat"
         options={{
           href: null, // Hide this from the tab bar
         }}

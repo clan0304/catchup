@@ -15,14 +15,11 @@ export type ProfileData = {
   updated_at?: string; // Added timestamp
 };
 
-
-
-
 export type AuthContextType = {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signInWithGoogle: () => Promise<void>;
+  signInWithGoogle: (promptAccountSelection?: boolean) => Promise<void>;
   signOut: () => Promise<void>;
   checkUsernameUnique: (username: string) => Promise<boolean>;
   completeProfile: (profileData: ProfileData) => Promise<{ error: any | null }>;

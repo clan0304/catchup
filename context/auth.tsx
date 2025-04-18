@@ -140,15 +140,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   // Sign in with Google - works on both Web and Mobile
-  const signInWithGoogle = async () => {
+  const signInWithGoogle = async (promptAccountSelection: boolean = false) => {
     try {
       console.log('Attempting to sign in with Google');
+
+      // Common options for both web and mobile
+      const authOptions = {
+        provider: 'google' as const,
+        options: {
+          queryParams: promptAccountSelection
+            ? {
+                prompt: 'select_account', // Force account selection
+                access_type: 'offline', // Get refresh token
+              }
+            : undefined,
+        },
+      };
 
       if (Platform.OS === 'web') {
         // Web specific flow
         const { error } = await supabase.auth.signInWithOAuth({
-          provider: 'google',
+          ...authOptions,
           options: {
+            ...authOptions.options,
             redirectTo: window.location.origin,
           },
         });
@@ -161,8 +175,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
         // First, get the authorization URL from Supabase
         const { data, error } = await supabase.auth.signInWithOAuth({
-          provider: 'google',
+          ...authOptions,
           options: {
+            ...authOptions.options,
             redirectTo: redirectUri,
             skipBrowserRedirect: true,
           },
