@@ -26,6 +26,7 @@ import {
 import { UserConnection } from '../../services/connections';
 import { getUnreadMessageCount } from '../../services/messages';
 import { supabase } from '../../lib/supabase';
+import UserCard from '../../components/UserCard';
 
 export default function HomeScreen() {
   const { user, signOut } = useAuth();
@@ -307,102 +308,16 @@ export default function HomeScreen() {
               {allProfiles
                 .filter((profile) => profile.id !== user?.id) // Filter out current user
                 .map((profile) => (
-                  <TouchableOpacity
+                  <UserCard
                     key={profile.id}
-                    className="flex-row items-center bg-gray-50 rounded-xl p-4 mb-3 relative"
-                    activeOpacity={0.7}
-                  >
-                    {/* Message icon for connected users, shown at top right of profile container */}
-                    {connectedUserIds.has(profile.id!) && (
-                      <TouchableOpacity
-                        className="absolute top-2 right-2 bg-primary p-2 rounded-full z-10"
-                        onPress={() =>
-                          navigateToChat(profile.id!, profile.username)
-                        }
-                      >
-                        <Ionicons
-                          name="chatbubble-outline"
-                          size={18}
-                          color="white"
-                        />
-                      </TouchableOpacity>
-                    )}
-
-                    {profile.photo_url ? (
-                      <Image
-                        source={{ uri: profile.photo_url }}
-                        className="w-16 h-16 rounded-full"
-                      />
-                    ) : (
-                      <View className="w-16 h-16 rounded-full bg-gray-300 items-center justify-center">
-                        <Text className="text-gray-600 text-xl font-bold">
-                          {profile.username?.charAt(0)?.toUpperCase() || '?'}
-                        </Text>
-                      </View>
-                    )}
-
-                    <View className="ml-4 flex-1">
-                      <Text className="text-lg font-semibold text-gray-800">
-                        {profile.username}
-                      </Text>
-                      <Text className="text-gray-600">{profile.city}</Text>
-
-                      <View className="flex-row mt-2 flex-wrap">
-                        {profile.interests &&
-                          profile.interests
-                            .slice(0, 3)
-                            .map((interest, index) => (
-                              <View
-                                key={index}
-                                className="bg-blue-100 px-2 py-1 rounded-full mr-2 mb-1"
-                              >
-                                <Text className="text-xs text-blue-800">
-                                  {interest}
-                                </Text>
-                              </View>
-                            ))}
-
-                        {profile.interests && profile.interests.length > 3 && (
-                          <Text className="text-xs text-gray-500 ml-1 mt-1">
-                            +{profile.interests.length - 3} more
-                          </Text>
-                        )}
-                      </View>
-                    </View>
-
-                    <View className="flex-row">
-                      {/* Connect button - only shown if not connected and no pending request */}
-                      {!connectedUserIds.has(profile.id!) &&
-                        !pendingRequestUserIds.has(profile.id!) && (
-                          <TouchableOpacity
-                            className="bg-primary py-2 px-3 rounded-lg"
-                            onPress={() => handleConnectRequest(profile.id!)}
-                            disabled={requestingUserId === profile.id}
-                          >
-                            {requestingUserId === profile.id ? (
-                              <ActivityIndicator size="small" color="white" />
-                            ) : (
-                              <Text className="text-white font-medium">
-                                Connect
-                              </Text>
-                            )}
-                          </TouchableOpacity>
-                        )}
-
-                      {/* Pending button - shown if request is pending */}
-                      {!connectedUserIds.has(profile.id!) &&
-                        pendingRequestUserIds.has(profile.id!) && (
-                          <TouchableOpacity
-                            className="bg-gray-300 py-2 px-3 rounded-lg"
-                            disabled={true}
-                          >
-                            <Text className="text-gray-600 font-medium">
-                              Pending
-                            </Text>
-                          </TouchableOpacity>
-                        )}
-                    </View>
-                  </TouchableOpacity>
+                    profile={profile}
+                    isConnected={connectedUserIds.has(profile.id!)}
+                    isPendingRequest={pendingRequestUserIds.has(profile.id!)}
+                    isRequesting={requestingUserId === profile.id}
+                    onConnect={handleConnectRequest}
+                    onNavigateToChat={navigateToChat}
+                    requestingUserId={requestingUserId}
+                  />
                 ))}
             </View>
           )}
