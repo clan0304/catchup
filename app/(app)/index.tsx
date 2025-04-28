@@ -11,6 +11,7 @@ import {
   Modal,
   Animated,
   Dimensions,
+  PanResponder,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/auth';
@@ -28,10 +29,14 @@ import { getUnreadMessageCount } from '../../services/messages';
 import { supabase } from '../../lib/supabase';
 import UserCard from '../../components/UserCard';
 
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const SWIPE_THRESHOLD = 120;
+
 export default function HomeScreen() {
   const { user, signOut } = useAuth();
   const [userProfile, setUserProfile] = useState<ProfileData | null>(null);
   const [allProfiles, setAllProfiles] = useState<ProfileData[]>([]);
+  const [filteredProfiles, setFilteredProfiles] = useState<ProfileData[]>([]);
   const [loading, setLoading] = useState(true);
   const [connections, setConnections] = useState<UserConnection[]>([]);
   const [connectedUserIds, setConnectedUserIds] = useState<Set<string>>(
@@ -48,6 +53,86 @@ export default function HomeScreen() {
   // Animation for menu
   const menuAnimation = useRef(new Animated.Value(0)).current;
   const screenHeight = Dimensions.get('window').height;
+
+  // Animation for card swipe
+  const position = useRef(new Animated.ValueXY()).current;
+  const currentCardIndex = useRef(0);
+
+  // Pan Responder setup for swipe gestures
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onPanResponderMove: (event, gesture) => {
+        position.setValue({ x: gesture.dx, y: gesture.dy });
+      },
+      onPanResponderRelease: (event, gesture) => {
+        if (gesture.dx > SWIPE_THRESHOLD) {
+          swipeRight();
+        } else if (gesture.dx < -SWIPE_THRESHOLD) {
+          swipeLeft();
+        } else {
+          resetPosition();
+        }
+      },
+    })
+  ).current;
+
+  // Get rotation for the card based on gesture position
+  const getCardStyle = () => {
+    const rotate = position.x.interpolate({
+      inputRange: [-SCREEN_WIDTH * 1.5, 0, SCREEN_WIDTH * 1.5],
+      outputRange: ['-30deg', '0deg', '30deg'],
+    });
+
+    return {
+      ...position.getLayout(),
+      transform: [{ rotate }],
+    };
+  };
+
+  // Reset card position to center
+  const resetPosition = () => {
+    Animated.spring(position, {
+      toValue: { x: 0, y: 0 },
+      useNativeDriver: true,
+      friction: 5,
+    }).start();
+  };
+
+  // Handle swipe right (like/connect)
+  const swipeRight = () => {
+    Animated.timing(position, {
+      toValue: { x: SCREEN_WIDTH + 100, y: 0 },
+      duration: 250,
+      useNativeDriver: true,
+    }).start(() => {
+      if (filteredProfiles.length > currentCardIndex.current) {
+        const profile = filteredProfiles[currentCardIndex.current];
+        handleConnectRequest(profile.id!);
+      }
+      advanceToNextCard();
+    });
+  };
+
+  // Handle swipe left (pass)
+  const swipeLeft = () => {
+    Animated.timing(position, {
+      toValue: { x: -SCREEN_WIDTH - 100, y: 0 },
+      duration: 250,
+      useNativeDriver: true,
+    }).start(() => {
+      advanceToNextCard();
+    });
+  };
+
+  // Move to next card
+  const advanceToNextCard = () => {
+    position.setValue({ x: 0, y: 0 });
+    currentCardIndex.current += 1;
+
+    // Force a re-render
+    setFilteredProfiles([...filteredProfiles]);
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -99,7 +184,15 @@ export default function HomeScreen() {
         if (error) {
           console.error('Error fetching profiles:', error);
         } else {
-          setAllProfiles(profiles);
+          // Filter out the current user and sort by some criteria (like most recent)
+          const otherProfiles = profiles.filter(
+            (profile) => profile.id !== user?.id
+          );
+          setAllProfiles(otherProfiles);
+          setFilteredProfiles(otherProfiles);
+
+          // Reset the card index to start from first profile
+          currentCardIndex.current = 0;
         }
       } catch (error) {
         console.error('Error in fetchData:', error);
@@ -219,6 +312,45 @@ export default function HomeScreen() {
     ]);
   };
 
+  // Render current card
+  const renderCard = () => {
+    // No more profiles to show
+    if (currentCardIndex.current >= filteredProfiles.length) {
+      return (
+        <View className="items-center justify-center p-6">
+          <Ionicons name="people-outline" size={64} color="#CBD5E1" />
+          <Text className="text-lg font-bold text-gray-600 mt-4 text-center">
+            No more profiles to show.
+          </Text>
+          <Text className="text-gray-500 text-center mt-2">
+            Check back later for new people!
+          </Text>
+        </View>
+      );
+    }
+
+    // Get current profile
+    const profile = filteredProfiles[currentCardIndex.current];
+    const isConnected = connectedUserIds.has(profile.id!);
+    const isPendingRequest = pendingRequestUserIds.has(profile.id!);
+
+    return (
+      <Animated.View
+        {...panResponder.panHandlers}
+        style={[getCardStyle(), { position: 'absolute' }]}
+      >
+        <UserCard
+          profile={profile}
+          isConnected={isConnected}
+          isPendingRequest={isPendingRequest}
+          onConnect={() => handleConnectRequest(profile.id!)}
+          onNavigateToChat={() => navigateToChat(profile.id!, profile.username)}
+          isRequesting={requestingUserId === profile.id}
+        />
+      </Animated.View>
+    );
+  };
+
   if (loading) {
     return (
       <SafeAreaView className="flex-1 justify-center items-center bg-white">
@@ -230,102 +362,83 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-white">
-      <ScrollView className="flex-1">
-        {/* Header with profile info */}
-        <View className="px-6 pt-6 pb-4 flex-row items-center justify-between">
-          <View>
-            <Text className="text-3xl font-bold text-gray-800">Welcome</Text>
-            <Text className="text-xl text-gray-800">
-              {userProfile?.username || 'User'}
-            </Text>
-          </View>
-
-          <View className="flex-row">
-            {/* Notification icon with badge */}
-            <TouchableOpacity
-              className="mr-4 relative"
-              onPress={() => router.push('/(app)/connections')}
-            >
-              <Ionicons
-                name="notifications-outline"
-                size={28}
-                color="#5E72E4"
-              />
-              {pendingRequestsCount > 0 && (
-                <View className="absolute -top-1 -right-1 bg-red-500 rounded-full w-5 h-5 items-center justify-center">
-                  <Text className="text-white text-xs font-bold">
-                    {pendingRequestsCount > 9 ? '9+' : pendingRequestsCount}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
-
-            {/* Messages button with badge */}
-            <TouchableOpacity
-              className="mr-4 relative"
-              onPress={navigateToMessages}
-            >
-              <Ionicons name="mail-outline" size={28} color="#5E72E4" />
-              {unreadMessageCount > 0 && (
-                <View className="absolute -top-1 -right-1 bg-red-500 rounded-full w-5 h-5 items-center justify-center">
-                  <Text className="text-white text-xs font-bold">
-                    {unreadMessageCount > 9 ? '9+' : unreadMessageCount}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
-
-            {/* Profile photo */}
-            <TouchableOpacity onPress={toggleProfileMenu} className="relative">
-              {userProfile?.photo_url ? (
-                <Image
-                  source={{ uri: userProfile.photo_url }}
-                  className="w-8 h-8 rounded-full border-2 border-primary"
-                />
-              ) : (
-                <View className="w-12 h-12 rounded-full bg-gray-300 items-center justify-center border-2 border-primary">
-                  <Text className="text-gray-600 text-xl font-bold">
-                    {userProfile?.username?.charAt(0)?.toUpperCase() || '?'}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* All Users Section */}
-        <View className="px-6 mt-4">
-          <Text className="text-lg font-semibold text-gray-800 mb-4">
-            All Users
+      {/* Header with profile info */}
+      <View className="flex-row justify-between items-center px-6 pt-6 pb-4">
+        <View>
+          <Text className="text-3xl font-bold text-gray-800">Welcome</Text>
+          <Text className="text-xl text-gray-800">
+            {userProfile?.username || 'User'}
           </Text>
-
-          {allProfiles.length === 0 ? (
-            <View className="bg-gray-100 rounded-xl p-5 items-center justify-center">
-              <Text className="text-gray-500">No other users found</Text>
-            </View>
-          ) : (
-            <View className="mb-6">
-              {allProfiles
-                .filter((profile) => profile.id !== user?.id) // Filter out current user
-                .map((profile) => (
-                  <UserCard
-                    key={profile.id}
-                    profile={profile}
-                    isConnected={connectedUserIds.has(profile.id!)}
-                    isPendingRequest={pendingRequestUserIds.has(profile.id!)}
-                    isRequesting={requestingUserId === profile.id}
-                    onConnect={handleConnectRequest}
-                    onNavigateToChat={navigateToChat}
-                    requestingUserId={requestingUserId}
-                  />
-                ))}
-            </View>
-          )}
         </View>
 
-        {/* Bottom padding */}
-        <View className="h-6" />
-      </ScrollView>
+        <View className="flex-row items-center">
+          {/* Notification icon with badge */}
+          <TouchableOpacity
+            className="mr-4 relative"
+            onPress={() => router.push('/(app)/connections')}
+          >
+            <Ionicons name="notifications-outline" size={28} color="#5E72E4" />
+            {pendingRequestsCount > 0 && (
+              <View className="absolute -top-1 -right-1 bg-red-500 rounded-full w-5 h-5 items-center justify-center">
+                <Text className="text-white text-xs font-bold">
+                  {pendingRequestsCount > 9 ? '9+' : pendingRequestsCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          {/* Messages button with badge */}
+          <TouchableOpacity
+            className="mr-4 relative"
+            onPress={navigateToMessages}
+          >
+            <Ionicons name="mail-outline" size={28} color="#5E72E4" />
+            {unreadMessageCount > 0 && (
+              <View className="absolute -top-1 -right-1 bg-red-500 rounded-full w-5 h-5 items-center justify-center">
+                <Text className="text-white text-xs font-bold">
+                  {unreadMessageCount > 9 ? '9+' : unreadMessageCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          {/* Profile photo */}
+          <TouchableOpacity onPress={toggleProfileMenu} className="relative">
+            {userProfile?.photo_url ? (
+              <Image
+                source={{ uri: userProfile.photo_url }}
+                className="w-12 h-12 rounded-full border-2 border-primary"
+              />
+            ) : (
+              <View className="w-12 h-12 rounded-full bg-gray-300 items-center justify-center border-2 border-primary">
+                <Text className="text-gray-600 text-xl font-bold">
+                  {userProfile?.username?.charAt(0)?.toUpperCase() || '?'}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Swipe Card Area */}
+      <View className="flex-1 justify-center items-center">{renderCard()}</View>
+
+      {/* Swipe Action Buttons */}
+      <View className="flex-row justify-evenly py-6">
+        <TouchableOpacity
+          className="w-16 h-16 bg-red-500 rounded-full justify-center items-center shadow-md"
+          onPress={swipeLeft}
+        >
+          <Ionicons name="close-outline" size={30} color="white" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          className="w-16 h-16 bg-green-500 rounded-full justify-center items-center shadow-md"
+          onPress={swipeRight}
+        >
+          <Ionicons name="checkmark-outline" size={30} color="white" />
+        </TouchableOpacity>
+      </View>
 
       {/* Profile Menu Modal */}
       <Modal
@@ -335,10 +448,9 @@ export default function HomeScreen() {
         onRequestClose={toggleProfileMenu}
       >
         <TouchableOpacity
-          style={{ flex: 1 }}
+          className="flex-1 bg-black bg-opacity-50"
           activeOpacity={1}
           onPress={toggleProfileMenu}
-          className="bg-black bg-opacity-50"
         >
           <Animated.View
             style={{

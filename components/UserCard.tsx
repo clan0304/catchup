@@ -6,110 +6,118 @@ import {
   TouchableOpacity,
   Image,
   ActivityIndicator,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ProfileData } from '../types/auth';
+
+const { width } = Dimensions.get('window');
+const CARD_WIDTH = width * 0.9;
+const CARD_HEIGHT = CARD_WIDTH * 1.5; // Aspect ratio for the card
 
 type UserCardProps = {
   profile: ProfileData;
   isConnected: boolean;
   isPendingRequest: boolean;
+  onConnect: () => void;
+  onNavigateToChat: () => void;
   isRequesting: boolean;
-  onConnect: (userId: string) => void;
-  onNavigateToChat: (userId: string, username: string) => void;
-  requestingUserId: string | null;
 };
 
 const UserCard = ({
   profile,
   isConnected,
   isPendingRequest,
-  isRequesting,
   onConnect,
   onNavigateToChat,
-  requestingUserId,
+  isRequesting,
 }: UserCardProps) => {
   return (
-    <TouchableOpacity
-      key={profile.id}
-      className="flex-row items-center bg-gray-50 rounded-xl p-4 mb-3 relative"
-      activeOpacity={0.7}
+    <View
+      className="overflow-hidden rounded-xl bg-white shadow-md"
+      style={{ width: CARD_WIDTH, height: CARD_HEIGHT }}
     >
-      {/* Message icon for connected users, shown at top right of profile container */}
-      {isConnected && (
-        <TouchableOpacity
-          className="absolute top-2 right-2 bg-primary p-2 rounded-full z-10"
-          onPress={() => onNavigateToChat(profile.id!, profile.username)}
-        >
-          <Ionicons name="chatbubble-outline" size={18} color="white" />
-        </TouchableOpacity>
-      )}
+      {/* Profile Photo */}
+      <View className="relative" style={{ height: CARD_WIDTH }}>
+        {profile.photo_url ? (
+          <Image
+            source={{ uri: profile.photo_url }}
+            className="w-full h-full"
+            resizeMode="cover"
+          />
+        ) : (
+          <View className="w-full h-full bg-gray-200 items-center justify-center">
+            <Text className="text-gray-500 text-6xl font-bold">
+              {profile.username?.charAt(0)?.toUpperCase() || '?'}
+            </Text>
+          </View>
+        )}
 
-      {profile.photo_url ? (
-        <Image
-          source={{ uri: profile.photo_url }}
-          className="w-16 h-16 rounded-full"
-        />
-      ) : (
-        <View className="w-16 h-16 rounded-full bg-gray-300 items-center justify-center">
-          <Text className="text-gray-600 text-xl font-bold">
-            {profile.username?.charAt(0)?.toUpperCase() || '?'}
-          </Text>
-        </View>
-      )}
+        {/* Chat icon for connected users */}
+        {isConnected && (
+          <TouchableOpacity
+            className="absolute top-4 right-4 bg-primary rounded-full w-12 h-12 items-center justify-center shadow-md"
+            onPress={onNavigateToChat}
+          >
+            <Ionicons name="chatbubble-outline" size={24} color="white" />
+          </TouchableOpacity>
+        )}
+      </View>
 
-      <View className="ml-4 flex-1">
-        <Text className="text-lg font-semibold text-gray-800">
+      {/* Profile Details */}
+      <View className="flex-1 bg-gray-200 p-4">
+        <Text className="text-2xl font-bold text-gray-800">
           {profile.username}
         </Text>
-        <Text className="text-gray-600">{profile.city}</Text>
+        <Text className="text-base text-gray-600 mb-3">{profile.city}</Text>
 
-        <View className="flex-row mt-2 flex-wrap">
+        {/* Interests */}
+        <View className="flex-row flex-wrap mb-4">
           {profile.interests &&
             profile.interests.slice(0, 3).map((interest, index) => (
               <View
                 key={index}
-                className="bg-blue-100 px-2 py-1 rounded-full mr-2 mb-1"
+                className="bg-blue-100 px-2.5 py-1 rounded-full mr-2 mb-2"
               >
                 <Text className="text-xs text-blue-800">{interest}</Text>
               </View>
             ))}
 
           {profile.interests && profile.interests.length > 3 && (
-            <Text className="text-xs text-gray-500 ml-1 mt-1">
+            <Text className="text-xs text-gray-500 self-center ml-1">
               +{profile.interests.length - 3} more
             </Text>
           )}
         </View>
-      </View>
 
-      <View className="flex-row">
-        {/* Connect button - only shown if not connected and no pending request */}
-        {!isConnected && !isPendingRequest && (
-          <TouchableOpacity
-            className="bg-primary py-2 px-3 rounded-lg"
-            onPress={() => onConnect(profile.id!)}
-            disabled={isRequesting}
-          >
-            {requestingUserId === profile.id ? (
-              <ActivityIndicator size="small" color="white" />
-            ) : (
-              <Text className="text-white font-medium">Connect</Text>
-            )}
-          </TouchableOpacity>
-        )}
+        {/* Action Button */}
+        <View className="flex-row justify-center mt-auto">
+          {!isConnected && !isPendingRequest && (
+            <TouchableOpacity
+              className="bg-primary py-3 px-6 rounded-lg min-w-[120px] items-center justify-center"
+              onPress={onConnect}
+              disabled={isRequesting}
+            >
+              {isRequesting ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <Text className="text-white font-semibold text-base">
+                  Connect
+                </Text>
+              )}
+            </TouchableOpacity>
+          )}
 
-        {/* Pending button - shown if request is pending */}
-        {!isConnected && isPendingRequest && (
-          <TouchableOpacity
-            className="bg-gray-300 py-2 px-3 rounded-lg"
-            disabled={true}
-          >
-            <Text className="text-gray-600 font-medium">Pending</Text>
-          </TouchableOpacity>
-        )}
+          {!isConnected && isPendingRequest && (
+            <View className="bg-gray-400 py-3 px-6 rounded-lg min-w-[120px] items-center justify-center">
+              <Text className="text-white font-semibold text-base">
+                Pending
+              </Text>
+            </View>
+          )}
+        </View>
       </View>
-    </TouchableOpacity>
+    </View>
   );
 };
 

@@ -4,6 +4,8 @@ export type Message = {
   sender_id: string;
   receiver_id: string;
   content: string;
+  media_url?: string | null;
+  media_type?: 'image' | 'video' | null;
   created_at: string;
   read: boolean;
 };

@@ -7,11 +7,15 @@ import { Message, ConversationSummary } from '../types/messages';
  * @param senderId - ID of the sender
  * @param receiverId - ID of the receiver
  * @param content - Content of the message
+ * @param mediaUrl - Optional URL of media attachment
+ * @param mediaType - Optional type of media ('image' or 'video')
  */
 export async function sendMessage(
   senderId: string,
   receiverId: string,
-  content: string
+  content: string,
+  mediaUrl?: string | null,
+  mediaType?: 'image' | 'video' | null
 ) {
   try {
     // First, verify these users are connected
@@ -36,6 +40,8 @@ export async function sendMessage(
       sender_id: senderId,
       receiver_id: receiverId,
       content,
+      media_url: mediaUrl || null,
+      media_type: mediaType || null,
       read: false,
     });
 
